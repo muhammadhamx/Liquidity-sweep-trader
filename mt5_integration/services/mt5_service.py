@@ -109,7 +109,10 @@ class MT5Service:
             info = mt5.symbol_info(symbol)
             if info is None or not info.visible:
                 mt5.symbol_select(symbol, True)
-            rates = mt5.copy_rates_range(symbol, tf, start_time, end_time)
+            # Ensure MT5 receives naive UTC datetimes
+            st = start_time.astimezone(pytz.UTC).replace(tzinfo=None) if hasattr(start_time, 'tzinfo') and start_time.tzinfo else start_time
+            et = end_time.astimezone(pytz.UTC).replace(tzinfo=None) if hasattr(end_time, 'tzinfo') and end_time.tzinfo else end_time
+            rates = mt5.copy_rates_range(symbol, tf, st, et)
             if rates is None or len(rates) == 0:
                 print(f"⚠️ No data returned for {symbol} {timeframe}")
                 return None
@@ -124,7 +127,7 @@ class MT5Service:
     
     def get_asian_session_data(self, symbol: str = "XAUUSD") -> Dict:
         """
-        Calculate Asian session data (03:00-09:00 UTC+3)
+        Calculate Asian session data (00:00-06:00 UTC)
         Returns: high, low, midpoint, range_size, grade, risk_multiplier
         """
         print(f"\n{'='*50}")
@@ -132,15 +135,14 @@ class MT5Service:
         print(f"{'='*50}")
         
         try:
-            # Get today's date
-            today = datetime.now().date()
-            
-            # Calculate UTC+3 time range (03:00-09:00)
-            start_time = datetime.combine(today, dt_time(3, 0))   # 03:00
-            end_time = datetime.combine(today, dt_time(9, 0))     # 09:00
+            # Calculate UTC window for today
+            now_utc = datetime.utcnow()
+            today_utc = now_utc.date()
+            start_time = datetime.combine(today_utc, dt_time(0, 0))   # 00:00 UTC
+            end_time = datetime.combine(today_utc, dt_time(6, 0))     # 06:00 UTC
             
             print(f"📅 Fetching Asian session data for {symbol}")
-            print(f"⏰ Time range: {start_time} to {end_time}")
+            print(f"⏰ Time range (UTC): {start_time} to {end_time}")
             
             # Get M5 data for Asian session
             df = self.get_historical_data(symbol, "M5", start_time, end_time)
@@ -175,6 +177,7 @@ class MT5Service:
                 'risk_multiplier': risk_multiplier,
                 'start_time': start_time,
                 'end_time': end_time,
+                'timezone': 'UTC',
                 'data_points': len(df)
             }
             

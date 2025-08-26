@@ -7,11 +7,22 @@ from .views import (
     get_server_time, get_symbol_info, get_mt5_version,
     # Signal detection views
     initialize_session, detect_sweep, confirm_reversal, generate_signal,
-    check_confluence, get_session_status, run_full_analysis
-    , run_strategy_once
+    check_confluence, get_session_status, run_full_analysis, run_strategy_once
 )
 
+# Import auto trading views
+from .views.auto_trading_views import (
+    start_auto_trading, stop_auto_trading, get_auto_trading_status,
+    reset_daily_counters, update_trading_parameters
+)
+
+# Import dashboard views
+from .views.dashboard_views import developer_dashboard
+
 urlpatterns = [
+    # Dashboard
+    path('', developer_dashboard, name='developer-dashboard'),
+
     # Connection endpoints
     path('connect/', connect_mt5, name='connect-mt5'),
     path('disconnect/', disconnect_mt5, name='disconnect-mt5'),
@@ -42,6 +53,13 @@ urlpatterns = [
     path('signal/session-status/', get_session_status, name='session-status'),
     path('signal/run-analysis/', run_full_analysis, name='run-analysis'),
     path('signal/run-once/', run_strategy_once, name='run-strategy-once'),
+    
+    # Auto trading endpoints
+    path('auto-trading/start/', start_auto_trading, name='start-auto-trading'),
+    path('auto-trading/stop/', stop_auto_trading, name='stop-auto-trading'),
+    path('auto-trading/status/', get_auto_trading_status, name='auto-trading-status'),
+    path('auto-trading/reset-counters/', reset_daily_counters, name='reset-daily-counters'),
+    path('auto-trading/update-parameters/', update_trading_parameters, name='update-trading-parameters'),
     
     # Utility endpoints
     path('server-time/', get_server_time, name='server-time'),

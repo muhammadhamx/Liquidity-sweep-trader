@@ -370,22 +370,56 @@ class TradeService:
                 return {'success': False, 'error': 'No tick price available'}
 
             request = {
-                'action': mt5.TRADE_ACTION_DEAL,
-                'symbol': symbol,
-                'volume': volume,
-                'type': order_type,
-                'position': position_id,
-                'price': price,
-                'deviation': deviation,
-                'magic': 234000,
-                'comment': 'API Close',
-                'type_time': mt5.ORDER_TIME_GTC,
-                'type_filling': mt5.ORDER_FILLING_FOK,
+                "action": mt5.TRADE_ACTION_DEAL,
+                "symbol": symbol,
+                "volume": volume,
+                "type": order_type,
+                "position": position_id,
+                "price": price,
+                "deviation": deviation,
+                "magic": 234000,
+                "comment": "API Close",
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": mt5.ORDER_FILLING_FOK,
             }
             result = mt5.order_send(request)
             if result.retcode != mt5.TRADE_RETCODE_DONE:
-                return {'success': False, 'error': f"Close failed: {result.comment} (code: {result.retcode})", 'retcode': result.retcode}
-            return {'success': True, 'message': 'Position closed', 'retcode': result.retcode}
+                return {'success': False, 'error': f'Close failed: {result.comment}', 'retcode': result.retcode}
+            return {'success': True, 'result': result._asdict()}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
+    def modify_position_sl_tp(self, position_id: int, sl: float | None = None, tp: float | None = None, deviation: int = 20) -> Dict:
+        """Modify SL/TP for an existing position using TRADE_ACTION_SLTP."""
+        try:
+            if not self.connected and self.mt5_service:
+                self.connected = self.mt5_service.connected
+            if not self.connected:
+                return {'success': False, 'error': 'Not connected to MT5'}
+            positions = mt5.positions_get(ticket=position_id)
+            if positions is None or len(positions) == 0:
+                return {'success': False, 'error': f'Position {position_id} not found'}
+            pos = positions[0]
+            symbol = pos.symbol
+            tick = mt5.symbol_info_tick(symbol)
+            if not tick:
+                return {'success': False, 'error': 'No tick available'}
+            price = tick.bid if pos.type == mt5.POSITION_TYPE_BUY else tick.ask
+            request = {
+                "action": mt5.TRADE_ACTION_SLTP,
+                "symbol": symbol,
+                "position": position_id,
+                "sl": sl if sl is not None else pos.sl,
+                "tp": tp if tp is not None else pos.tp,
+                "price": price,
+                "deviation": deviation,
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": mt5.ORDER_FILLING_FOK,
+            }
+            result = mt5.order_send(request)
+            if result.retcode != mt5.TRADE_RETCODE_DONE:
+                return {'success': False, 'error': f'SL/TP modify failed: {result.comment}', 'retcode': result.retcode}
+            return {'success': True, 'result': result._asdict()}
         except Exception as e:
             return {'success': False, 'error': str(e)}
 

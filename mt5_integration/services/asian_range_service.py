@@ -1,37 +1,58 @@
 from datetime import datetime, time, timedelta
 import pandas as pd
-from typing import Dict, Tuple
-from .mt5_service import MT5Service
+from typing import Dict, Tuple, Any
+import logging
+# Import the base class, not the specific implementation
+# This allows us to work with either MT5Service or MockMT5Service
+
+logger = logging.getLogger('api_requests')
 
 class AsianRangeService:
-    def __init__(self, mt5_service: MT5Service):
+    def __init__(self, mt5_service: Any):
         self.mt5_service = mt5_service
     
     def calculate_asian_range(self, symbol: str = "XAUUSD") -> Dict:
         """
         Calculate Asian session range with comprehensive data
         """
-        print(f"\n{'='*50}")
-        print("CALCULATING ASIAN SESSION RANGE")
-        print(f"{'='*50}")
+        logger.info(f"Calculating Asian range for {symbol}")
         
         # Get Asian session data
         result = self.mt5_service.get_asian_session_data(symbol)
         
-        if not result['success']:
+        if not result or not result.get('success', False):
+            logger.warning(f"Failed to get Asian session data for {symbol}: {result.get('error', 'Unknown error')}")
+            return result if result else {'success': False, 'error': 'Failed to get Asian session data'}
+        
+        try:
+            # Get current price for context
+            current_price = 0
+            try:
+                # Try to get current price if the method exists
+                if hasattr(self.mt5_service, 'get_current_price'):
+                    current_price = self.mt5_service.get_current_price(symbol)
+                else:
+                    # Fallback to get_symbol_info_tick if available
+                    tick_info = self.mt5_service.get_symbol_info_tick(symbol)
+                    if tick_info and 'bid' in tick_info:
+                        current_price = tick_info['bid']
+            except Exception as e:
+                logger.warning(f"Error getting current price: {str(e)}")
+                current_price = result.get('midpoint', 0)  # Fallback to midpoint
+            
+            # Add additional metrics
+            result.update({
+                'current_price': current_price,
+                'timestamp': datetime.utcnow().isoformat() + 'Z',
+                'timezone': 'UTC',
+                'analysis': self._generate_analysis(result)
+            })
+            
+            logger.info(f"Asian range calculation successful: {result}")
             return result
-        
-        # Get current price for context
-        current_price = self.mt5_service.get_current_price(symbol)
-        
-        # Add additional metrics
-        result.update({
-            'current_price': current_price,
-            'timestamp': datetime.now().isoformat(),
-            'analysis': self._generate_analysis(result)
-        })
-        
-        return result
+        except Exception as e:
+            logger.error(f"Error in calculate_asian_range: {str(e)}", exc_info=True)
+            return {'success': False, 'error': f'Error calculating Asian range: {str(e)}'}
     
     def _generate_analysis(self, range_data: Dict) -> str:
         """Generate analysis text based on range data"""

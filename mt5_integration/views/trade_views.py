@@ -2,10 +2,12 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.views.decorators.csrf import csrf_exempt
-from ..services.mt5_service import MT5Service
-from ..services.trade_service import TradeService
 from ..services import mt5_service, trade_service  # Import shared instances
 from ..serializers import TradeExecutionSerializer
+import logging
+
+# Configure logging
+logger = logging.getLogger('api_requests')
 
 @csrf_exempt
 @api_view(['POST'])

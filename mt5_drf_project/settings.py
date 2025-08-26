@@ -16,6 +16,7 @@ Including another URLconf
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -48,6 +49,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'mt5_integration.middleware.APIRequestLoggingMiddleware',  # Add our API logging middleware
 ]
 
 # CORS settings
@@ -120,7 +122,55 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Local CSRF trust for static HTML calls
 CSRF_TRUSTED_ORIGINS = ['http://localhost', 'http://127.0.0.1']
+
+# Logging configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{asctime} {levelname} {module} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'api_requests.log',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'api_requests': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'mt5_integration': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}

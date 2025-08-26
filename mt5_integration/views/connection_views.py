@@ -4,6 +4,10 @@ from rest_framework.response import Response
 from django.views.decorators.csrf import csrf_exempt
 from ..services import mt5_service  # Import shared instance
 from ..serializers import MT5ConnectionSerializer
+import logging
+
+# Configure logging
+logger = logging.getLogger('api_requests')
 
 @csrf_exempt
 @api_view(['POST'])
@@ -56,9 +60,13 @@ def disconnect_mt5(request):
 @api_view(['GET'])
 def get_account_info(request):
     """Get account information"""
+    logger.info("Account Info API called")
+    
     if not mt5_service.connected:
+        logger.warning("Account Info API failed: Not connected to MT5")
         return Response({'status': 'error', 'message': 'Not connected to MT5'}, 
                       status=status.HTTP_400_BAD_REQUEST)
     
     account_info = mt5_service.get_account_info()
+    logger.info(f"Account info retrieved: {account_info}")
     return Response({'status': 'success', 'data': account_info})
