@@ -1,4 +1,5 @@
 from datetime import datetime, time, timedelta
+from django.utils import timezone
 import pandas as pd
 from typing import Dict, Tuple, Any
 import logging
@@ -43,7 +44,7 @@ class AsianRangeService:
             # Add additional metrics
             result.update({
                 'current_price': current_price,
-                'timestamp': datetime.utcnow().isoformat() + 'Z',
+                'timestamp': timezone.now().isoformat(),
                 'timezone': 'UTC',
                 'analysis': self._generate_analysis(result)
             })

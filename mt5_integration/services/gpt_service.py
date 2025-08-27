@@ -447,7 +447,7 @@ class GPTService:
         - Take Profit 2: {take_profit2}
         - Risk (pips): {risk_pips}
         - Reward (pips): {reward_pips}
-        - Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} UTC
+        - Time: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')} UTC
         
         VALIDATION TASK:
         1. Validate the trade parameters
@@ -528,7 +528,7 @@ class GPTService:
         - Current Take Profit: {current_tp}
         - Current Profit/Loss: {current_r}R
         - Time in Trade: {time_in_trade} minutes
-        - Current Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} UTC
+        - Current Time: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')} UTC
         
         MANAGEMENT TASK:
         1. Assess the current trade status

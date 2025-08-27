@@ -306,10 +306,21 @@ class AutoTradingService:
             
         # Check for retest of entry zone
         asian_mid = float(self.signal_service.current_session.asian_range_midpoint)
-        m5_data = self.mt5_service.get_historical_data(self.symbol, 'M5', now - timedelta(minutes=20), now)
-        
+
+        # Try to get M5 data with fallback strategies
+        m5_data = None
+        for attempt in range(3):  # Try 3 times with different time ranges
+            time_range = 20 + (attempt * 10)  # 20, 30, 40 minutes
+            m5_data = self.mt5_service.get_historical_data(self.symbol, 'M5', now - timedelta(minutes=time_range), now)
+            if m5_data is not None and len(m5_data) > 0:
+                break
+
         if m5_data is None or len(m5_data) == 0:
-            logger.warning("No M5 data available for retest check")
+            # Check if it's weekend or market closed
+            if now.weekday() >= 5:  # Weekend
+                logger.debug("No M5 data available - Market closed (Weekend)")
+            else:
+                logger.warning("No M5 data available for retest check - Market may be closed or connection issue")
             return
             
         # Define retest band (midpoint ± 5 pips)

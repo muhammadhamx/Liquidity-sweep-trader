@@ -3,6 +3,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 import MetaTrader5 as mt5
 from datetime import datetime
+from django.utils import timezone
 from ..services import mt5_service  # Import shared instance
 
 @api_view(['GET'])
@@ -19,7 +20,7 @@ def get_server_time(request):
         return Response({
             'status': 'success',
             'server_time': datetime.fromtimestamp(server_time).isoformat(),
-            'local_time': datetime.now().isoformat()
+            'local_time': timezone.now().isoformat()
         })
     except Exception as e:
         return Response({

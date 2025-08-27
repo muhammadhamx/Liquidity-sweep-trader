@@ -30,7 +30,7 @@ class SignalDetectionService:
 
     def initialize_session(self, symbol: str = "XAUUSD") -> Dict:
         """Initialize a new trading session"""
-        today = datetime.now().date()
+        today = timezone.now().date()
         
         # Check if session already exists
         existing_session = TradingSession.objects.filter(
@@ -176,13 +176,23 @@ class SignalDetectionService:
         if not self.current_session or self.current_session.current_state != 'SWEPT':
             return {'success': False, 'error': 'Invalid state for reversal confirmation'}
         
-        # Get recent M5 data
-        end_time = datetime.now()
-        start_time = end_time - timedelta(minutes=30)
-        
-        m5_data = self.mt5_service.get_historical_data(symbol, "M5", start_time, end_time)
+        # Get recent M5 data with fallback strategies
+        end_time = timezone.now()
+
+        m5_data = None
+        for attempt in range(3):  # Try 3 times with different time ranges
+            time_range = 30 + (attempt * 15)  # 30, 45, 60 minutes
+            start_time = end_time - timedelta(minutes=time_range)
+            m5_data = self.mt5_service.get_historical_data(symbol, "M5", start_time, end_time)
+            if m5_data is not None and len(m5_data) > 0:
+                break
+
         if m5_data is None or len(m5_data) == 0:
-            return {'success': False, 'error': 'No M5 data available'}
+            # Check if it's weekend or market closed
+            if end_time.weekday() >= 5:  # Weekend
+                return {'success': False, 'error': 'Market closed (Weekend) - No M5 data available'}
+            else:
+                return {'success': False, 'error': 'No M5 data available - Market may be closed'}
         
         # Get Asian range
         asian_data = self.mt5_service.get_asian_session_data(symbol)
@@ -233,7 +243,7 @@ class SignalDetectionService:
         
         # Update session state to CONFIRMED and start retest window (3 M5 bars)
         self.current_session.current_state = 'CONFIRMED'
-        self.current_session.confirmation_time = datetime.now()
+        self.current_session.confirmation_time = timezone.now()
         self.current_session.save()
         
         return {
@@ -329,7 +339,7 @@ class SignalDetectionService:
         
         # Update session state
         self.current_session.current_state = 'ARMED'
-        self.current_session.armed_time = datetime.now()
+        self.current_session.armed_time = timezone.now()
         self.current_session.save()
         
         return {
@@ -383,7 +393,7 @@ class SignalDetectionService:
                 signal=signal,
                 order_id=result.get('order_id') or 0,
                 execution_price=result.get('price') or signal.entry_price,
-                execution_time=datetime.now(),
+                execution_time=timezone.now(),
                 status='EXECUTED'
             )
         except Exception:
@@ -401,7 +411,7 @@ class SignalDetectionService:
         spread = (tick['ask'] - tick['bid']) * 10  # XAUUSD pips
         spread_ok = spread <= 2.0
         # HTF bias from H4 and D1: simple MA bias proxy using close vs SMA
-        end = datetime.now()
+        end = timezone.now()
         d1 = self.mt5_service.get_historical_data(symbol, 'D1', end - timedelta(days=60), end)
         h4 = self.mt5_service.get_historical_data(symbol, 'H4', end - timedelta(days=30), end)
         def _bias(df: Optional[pd.DataFrame]) -> str:
@@ -428,7 +438,7 @@ class SignalDetectionService:
         buffer_minutes = 30
         try:
             from ..models import EconomicNews
-            now = datetime.now()
+            now = timezone.now()
             window_start = now - timedelta(minutes=buffer_minutes)
             window_end = now + timedelta(minutes=buffer_minutes)
             qs = EconomicNews.objects.filter(severity__in=['HIGH', 'CRITICAL'], release_time__gte=window_start, release_time__lte=window_end)
@@ -496,7 +506,7 @@ class SignalDetectionService:
             if not conf.get('success') or not conf.get('confluence_passed'):
                 return {'success': False, 'stage': 'CONFLUENCE', 'no_trade': True, 'reason': 'Confluence failed', 'details': conf}
             # 5) Time-boxed retest window (3 M5 bars)
-            now = datetime.now()
+            now = timezone.now()
             if self.current_session.confirmation_time and (now - self.current_session.confirmation_time) > timedelta(minutes=15):
                 # Expired retest window
                 self.current_session.current_state = 'COOLDOWN'
@@ -504,9 +514,21 @@ class SignalDetectionService:
                 return {'success': False, 'stage': 'RETEST', 'no_trade': True, 'reason': 'Retest window expired (3 M5 bars). Entering cooldown.'}
             # Check retest: price revisits entry zone (midpoint ± 5 pips) in-window
             asian_mid = float(self.current_session.asian_range_midpoint)
-            m5 = self.mt5_service.get_historical_data(symbol, 'M5', now - timedelta(minutes=20), now)
+
+            # Try to get M5 data with fallback strategies
+            m5 = None
+            for attempt in range(3):  # Try 3 times with different time ranges
+                time_range = 20 + (attempt * 10)  # 20, 30, 40 minutes
+                m5 = self.mt5_service.get_historical_data(symbol, 'M5', now - timedelta(minutes=time_range), now)
+                if m5 is not None and len(m5) > 0:
+                    break
+
             if m5 is None or len(m5) == 0:
-                return {'success': False, 'stage': 'RETEST', 'no_trade': True, 'reason': 'No M5 data for retest'}
+                # Check if it's weekend or market closed
+                if now.weekday() >= 5:  # Weekend
+                    return {'success': False, 'stage': 'RETEST', 'no_trade': True, 'reason': 'Market closed (Weekend) - No M5 data for retest'}
+                else:
+                    return {'success': False, 'stage': 'RETEST', 'no_trade': True, 'reason': 'No M5 data for retest - Market may be closed'}
             # Define retest band
             pip = 0.1
             band = 5 * pip
@@ -684,7 +706,7 @@ class SignalDetectionService:
             # 3. Hard exit conditions
             
             # 3.1 Session time limits (exit after Asian session ends)
-            now_utc = datetime.utcnow()
+            now_utc = timezone.now().astimezone(pytz.UTC).replace(tzinfo=None)
             sess_start = datetime.combine(now_utc.date(), time(0, 0))
             sess_end = datetime.combine(now_utc.date(), time(6, 0))
             
@@ -702,7 +724,7 @@ class SignalDetectionService:
             
             # 3.3 Trade timeout (max 4 hours in trade)
             exec_obj = TradeExecution.objects.filter(signal=signal).order_by('-execution_time').first()
-            if exec_obj and (datetime.now() - exec_obj.execution_time.replace(tzinfo=None)).total_seconds() > 4 * 60 * 60:
+            if exec_obj and (timezone.now() - exec_obj.execution_time).total_seconds() > 4 * 60 * 60:
                 close_res = self._trade_service.close_position(pos['ticket'])
                 actions.append({'action': 'CLOSE_TIMEOUT', 'result': close_res})
                 trade_closed = True
@@ -828,7 +850,7 @@ class SignalDetectionService:
         spread = (tick['ask'] - tick['bid']) * 10  # XAUUSD pips
         spread_ok = spread <= 2.0
         # HTF bias from H4 and D1: simple MA bias proxy using close vs SMA
-        end = datetime.now()
+        end = timezone.now()
         d1 = self.mt5_service.get_historical_data(symbol, 'D1', end - timedelta(days=60), end)
         h4 = self.mt5_service.get_historical_data(symbol, 'H4', end - timedelta(days=30), end)
         def _bias(df: Optional[pd.DataFrame]) -> str:
@@ -854,7 +876,7 @@ class SignalDetectionService:
         buffer_minutes = 30
         try:
             from ..models import EconomicNews
-            now = datetime.now()
+            now = timezone.now()
             window_start = now - timedelta(minutes=buffer_minutes)
             window_end = now + timedelta(minutes=buffer_minutes)
             qs = EconomicNews.objects.filter(severity__in=['HIGH', 'CRITICAL'], release_time__gte=window_start, release_time__lte=window_end)

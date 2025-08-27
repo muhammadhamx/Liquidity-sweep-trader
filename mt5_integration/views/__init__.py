@@ -10,7 +10,9 @@ __all__ = [
     # Connection views
     'connect_mt5',
     'disconnect_mt5',
+    'get_connection_status',
     'get_account_info',
+    'connection_dashboard',
     
     # Data views
     'get_symbols',

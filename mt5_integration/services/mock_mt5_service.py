@@ -4,6 +4,7 @@ Mock MT5 Service for development and testing
 import random
 import logging
 from datetime import datetime, timedelta
+from django.utils import timezone
 from typing import Dict, List, Tuple, Optional, Union
 
 logger = logging.getLogger('api_requests')
@@ -122,7 +123,7 @@ class MockMT5Service:
             'symbol': symbol,
             'bid': bid,
             'ask': ask,
-            'time': datetime.now().timestamp(),
+            'time': timezone.now().timestamp(),
         }
         
     def get_current_price(self, symbol: str) -> Dict:
@@ -135,7 +136,7 @@ class MockMT5Service:
                 'ask': tick['ask'],
                 'last': tick['bid'],  # Use bid as last for simplicity
                 'volume': 100,
-                'time': datetime.now().isoformat()
+                'time': timezone.now().isoformat()
             }
         return None
     
@@ -182,7 +183,7 @@ class MockMT5Service:
             'sl': stop_loss,
             'tp': take_profit,
             'profit': 0.0,
-            'time': datetime.now().timestamp(),
+            'time': timezone.now().timestamp(),
             'comment': comment,
         }
         

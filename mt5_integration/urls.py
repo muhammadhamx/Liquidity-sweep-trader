@@ -1,6 +1,6 @@
 from django.urls import path
 from .views import (
-    connect_mt5, disconnect_mt5, get_account_info,
+    connect_mt5, disconnect_mt5, get_account_info, get_connection_status, connection_dashboard,
     get_symbols, get_rates, get_current_price, get_open_orders,
     place_trade, get_positions, close_position, close_all_positions,
     get_asian_range, test_asian_range,
@@ -22,10 +22,12 @@ from .views.dashboard_views import developer_dashboard
 urlpatterns = [
     # Dashboard
     path('', developer_dashboard, name='developer-dashboard'),
+    path('connection/', connection_dashboard, name='connection-dashboard'),
 
     # Connection endpoints
     path('connect/', connect_mt5, name='connect-mt5'),
     path('disconnect/', disconnect_mt5, name='disconnect-mt5'),
+    path('connection-status/', get_connection_status, name='connection-status'),
     path('account-info/', get_account_info, name='account-info'),
     
     # Data endpoints

@@ -92,7 +92,7 @@ class MT5Service:
         if not self.connected:
             print("❌ Not connected to MT5")
             return None
-        
+
         timeframes = {
             'M1': mt5.TIMEFRAME_M1,
             'M5': mt5.TIMEFRAME_M5,
@@ -101,28 +101,74 @@ class MT5Service:
             'H4': mt5.TIMEFRAME_H4,
             'D1': mt5.TIMEFRAME_D1
         }
-        
+
         tf = timeframes.get(timeframe.upper(), mt5.TIMEFRAME_M5)
-        
+
         try:
             # Ensure symbol is selected/visible before fetching rates
             info = mt5.symbol_info(symbol)
             if info is None or not info.visible:
-                mt5.symbol_select(symbol, True)
+                if not mt5.symbol_select(symbol, True):
+                    print(f"❌ Failed to select symbol {symbol}")
+                    return None
+
             # Ensure MT5 receives naive UTC datetimes
             st = start_time.astimezone(pytz.UTC).replace(tzinfo=None) if hasattr(start_time, 'tzinfo') and start_time.tzinfo else start_time
             et = end_time.astimezone(pytz.UTC).replace(tzinfo=None) if hasattr(end_time, 'tzinfo') and end_time.tzinfo else end_time
+
+            # First try copy_rates_range
             rates = mt5.copy_rates_range(symbol, tf, st, et)
+
+            # If no data, try alternative method with copy_rates_from_pos
             if rates is None or len(rates) == 0:
-                print(f"⚠️ No data returned for {symbol} {timeframe}")
+                # Calculate how many bars we need (approximate)
+                time_diff = et - st
+                if timeframe.upper() == 'M1':
+                    bars_needed = int(time_diff.total_seconds() / 60) + 10
+                elif timeframe.upper() == 'M5':
+                    bars_needed = int(time_diff.total_seconds() / 300) + 10
+                elif timeframe.upper() == 'H1':
+                    bars_needed = int(time_diff.total_seconds() / 3600) + 5
+                else:
+                    bars_needed = 100
+
+                # Limit to reasonable number
+                bars_needed = min(bars_needed, 1000)
+
+                # Try getting recent data
+                rates = mt5.copy_rates_from_pos(symbol, tf, 0, bars_needed)
+
+                if rates is not None and len(rates) > 0:
+                    # Filter to requested time range
+                    df_temp = pd.DataFrame(rates)
+                    df_temp['time'] = pd.to_datetime(df_temp['time'], unit='s')
+
+                    # Convert start/end times to pandas datetime for comparison
+                    start_pd = pd.to_datetime(st)
+                    end_pd = pd.to_datetime(et)
+
+                    # Filter by time range
+                    mask = (df_temp['time'] >= start_pd) & (df_temp['time'] <= end_pd)
+                    rates_filtered = df_temp[mask]
+
+                    if len(rates_filtered) > 0:
+                        return rates_filtered.reset_index(drop=True)
+
+            if rates is None or len(rates) == 0:
+                # Check if market is closed
+                current_time = datetime.utcnow()
+                if current_time.weekday() >= 5:  # Weekend
+                    print(f"📅 Market closed (Weekend) - No {symbol} {timeframe} data available")
+                else:
+                    print(f"⚠️ No data returned for {symbol} {timeframe} (Market may be closed or no data in range)")
                 return None
-            
+
             df = pd.DataFrame(rates)
             df['time'] = pd.to_datetime(df['time'], unit='s')
             return df
-            
+
         except Exception as e:
-            print(f"❌ Error fetching historical data: {e}")
+            print(f"❌ Error fetching historical data for {symbol} {timeframe}: {e}")
             return None
     
     def get_asian_session_data(self, symbol: str = "XAUUSD") -> Dict:
